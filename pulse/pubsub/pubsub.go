@@ -8,7 +8,11 @@ import (
 )
 
 type PubSubClient struct {
-	client *pubsub.Client
+	Client *pubsub.Client
+}
+
+type PubSubMessage struct {
+	Data []byte
 }
 
 func NewPubSubClient(ctx context.Context, projectID string, opts ...option.ClientOption) (*PubSubClient, error) {
@@ -16,5 +20,5 @@ func NewPubSubClient(ctx context.Context, projectID string, opts ...option.Clien
 	if err != nil {
 		return nil, err
 	}
-	return &PubSubClient{client: client}, nil
+	return &PubSubClient{Client: client}, nil
 }
