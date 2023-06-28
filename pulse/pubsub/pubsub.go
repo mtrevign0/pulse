@@ -1,0 +1,20 @@
+package pubsub
+
+import (
+	"context"
+
+	"cloud.google.com/go/pubsub"
+	"google.golang.org/api/option"
+)
+
+type PubSubClient struct {
+	client *pubsub.Client
+}
+
+func NewPubSubClient(ctx context.Context, projectID string, opts ...option.ClientOption) (*PubSubClient, error) {
+	client, err := pubsub.NewClient(ctx, projectID, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &PubSubClient{client: client}, nil
+}
