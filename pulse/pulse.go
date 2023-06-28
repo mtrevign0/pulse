@@ -4,11 +4,13 @@ import (
 	"context"
 
 	"pulse/auth"
+	"pulse/firestore"
 	"google.golang.org/api/option"
 )
 
 type Pulse struct {
 	FirebaseAuth     *auth.FirebaseAuth
+	FirestoreClient  *firestore.FirestoreClient
 }
 
 func NewPulse(ctx context.Context, projectID string, opts ...option.ClientOption) (*Pulse, error) {
@@ -16,7 +18,13 @@ func NewPulse(ctx context.Context, projectID string, opts ...option.ClientOption
 	if err != nil {
 		return nil, err
 	}
+	firestoreClient, err := firestore.NewFirestoreClient(ctx, projectID, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Pulse{
 		FirebaseAuth:     firebaseAuth,
+		FirestoreClient:  firestoreClient,
 	}, nil
 }
