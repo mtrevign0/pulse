@@ -2,38 +2,61 @@ package service_connector
 
 import (
 	"context"
-	"sync"
-
-	"pulse/errors"
+	"encoding/json"
 	"google.golang.org/grpc"
+	"time"
+	"pulse/errors"
+	"pulse/pubsub"
+	cloudpubsub "cloud.google.com/go/pubsub"
 )
 
 type ServiceConnector struct {
-	connections map[string]*grpc.ClientConn
-	mu          sync.Mutex
+	services map[string]*grpc.ClientConn
+	PubSubClient *pubsub.PubSubClient
 }
 
 func NewServiceConnector() *ServiceConnector {
-	return &ServiceConnector{connections: make(map[string]*grpc.ClientConn)}
+	return &ServiceConnector{
+		services: make(map[string]*grpc.ClientConn),
+	}
 }
 
-func (s *ServiceConnector) ConnectService(ctx context.Context, name string, address string) error {
-	conn, err := grpc.DialContext(ctx, address, grpc.WithInsecure())
+func (sc *ServiceConnector) ConnectService(ctx context.Context, name string, address string) error {
+	conn, err := grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(5*time.Second))
 	if err != nil {
-		return err
+		return errors.ConnectionFailureError(name)
 	}
-	s.mu.Lock()
-	s.connections[name] = conn
-	s.mu.Unlock()
+	sc.services[name] = conn
 	return nil
 }
 
-func (s *ServiceConnector) GetService(name string) (*grpc.ClientConn, error) {
-	s.mu.Lock()
-	conn, ok := s.connections[name]
-	s.mu.Unlock()
+func (sc *ServiceConnector) GetService(name string) (*grpc.ClientConn, error) {
+	conn, ok := sc.services[name]
 	if !ok {
-		return nil, errors.ErrServiceNotFound
+		return nil, errors.UnknownServiceError(name)
 	}
 	return conn, nil
+}
+
+func (sc *ServiceConnector) CallServiceOrPublish(ctx context.Context, name string, call func(conn *grpc.ClientConn) error, payload interface{}) error {
+	conn, err := sc.GetService(name)
+	if err != nil {
+		return err
+	}
+
+	err = call(conn)
+	if err != nil {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return errors.MethodFailureError(name)
+		}
+
+		t := sc.PubSubClient.Client.Topic(name)
+		res := t.Publish(ctx, &cloudpubsub.Message{Data: data})
+		if _, err = res.Get(ctx); err != nil {
+			return errors.PublishFailureError(name)
+		}
+	}
+
+	return nil
 }
